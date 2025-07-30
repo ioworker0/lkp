@@ -37,16 +37,13 @@ jobs:
 
       - name: Clone LKP Test Scripts
         run: |
-          # The LKP robot uses helper scripts, so we must clone them first.
           git clone https://github.com/intel/lkp-tests.git ~/lkp-tests
 
       - name: Cache Kernel Repository
         id: kernel-cache
         uses: actions/cache@v4
         with:
-          # The directory to cache
           path: linux-next
-          # A unique key for the cache, based on the commit hash
           key: linux-next-${{ runner.os }}-${{ env.KERNEL_COMMIT }}
 
       - name: Clone kernel and checkout commit (if not cached)
@@ -55,16 +52,12 @@ jobs:
           echo "Cache miss. Cloning full repository..."
           git clone https://git.kernel.org/pub/scm/linux/kernel/git/next/linux-next.git
           cd linux-next
-          # Checkout the exact commit that introduced the warning
           git checkout ${{ env.KERNEL_COMMIT }}
 
       - name: Prepare build environment
         working-directory: ./linux-next
         run: |
-          # Download the specific config file from the LKP report
           wget -O config 'https://download.01.org/0day-ci/archive/20250730/202507301256.cZlxQ10s-lkp@intel.com/config'
-          
-          # Create build directory and place the config file
           mkdir build_dir
           cp config build_dir/.config
 
@@ -73,14 +66,13 @@ jobs:
         working-directory: ./linux-next
         run: |
           echo "### Preparing config with LKP script... ###"
-          # Run olddefconfig using the LKP wrapper script
-          # We provide the necessary variables to the script
-          CC=clang-18 CROSS_COMPILE=loongarch64-linux-gnu- \
+          # Run olddefconfig using the LKP wrapper script, providing ALL required variables.
+          COMPILER_INSTALL_PATH=$HOME/0day COMPILER=clang-18 CROSS_COMPILE=loongarch64-linux-gnu- \
           ~/lkp-tests/kbuild/make.cross W=1 O=build_dir ARCH=loongarch olddefconfig
 
           echo "### Starting main build with LKP script... ###"
           # Run the main build (vmlinux target) using the LKP wrapper script
-          CC=clang-18 CROSS_COMPILE=loongarch64-linux-gnu- \
+          COMPILER_INSTALL_PATH=$HOME/0day COMPILER=clang-18 CROSS_COMPILE=loongarch64-linux-gnu- \
           ~/lkp-tests/kbuild/make.cross W=1 O=build_dir ARCH=loongarch vmlinux -j$(nproc) | tee build.log || true
 
       - name: Check for the specific warnings
@@ -101,7 +93,7 @@ jobs:
             echo "::notice::SUCCESS: One or more expected warnings were successfully reproduced."
           else
             echo "::error::FAILURE: Could not reproduce the expected objtool warnings."
-            # exit 1 # Uncomment to fail the workflow
+            # exit 1
           fi
 
       - name: Upload build log for inspection
