@@ -78,7 +78,7 @@ jobs:
           echo "### Starting main build with LKP script... ###"
           # Run the main build (vmlinux target) using the LKP wrapper script
           COMPILER_INSTALL_PATH=$HOME/0day COMPILER=clang-20 CROSS_COMPILE=loongarch64-linux-gnu- \
-          ~/lkp-tests/kbuild/make.cross W=1 O=build_dir ARCH=loongarch vmlinux -j$(nproc) | tee build.log || true
+          ~/lkp-tests/kbuild/make.cross W=1 O=build_dir ARCH=loongarch vmlinux -j$(nproc) 2>&1 | tee build.log || true
 
       - name: Show relevant warnings from build log
         working-directory: ./linux-next
