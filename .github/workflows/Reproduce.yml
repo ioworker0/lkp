@@ -52,7 +52,8 @@ jobs:
         working-directory: ./linux-next
         run: |
           echo "Applying noinline fix to kernel/hung_task.c..."
-          sed -i 's/static int watchdog(void \*dummy)/static noinline int watchdog(void *dummy)/' kernel/hung_task.c
+          sed -i 's/static void check_hung_uninterruptible_tasks(unsigned long timeout)/static noinline void check_hung_uninterruptible_tasks(unsigned long timeout)/' kernel/hung_task.c
+          # sed -i 's/static int watchdog(void \*dummy)/static noinline int watchdog(void *dummy)/' kernel/hung_task.c
           # sed -i 's/static int hungtask_pm_notify(struct notifier_block \*self,/static noinline int hungtask_pm_notify(struct notifier_block *self,/' kernel/hung_task.c
           echo "Fix applied. Verifying changes:"
           grep "noinline" kernel/hung_task.c
@@ -83,7 +84,7 @@ jobs:
         working-directory: ./linux-next
         run: |
           echo "### Searching for relevant objtool warnings in build.log ###"
-          grep "warning: objtool" build.log | grep -E "watchdog|hungtask_pm_notify" || echo "No relevant warnings found."
+          grep "objtool" build.log | grep -E "watchdog|hungtask_pm_notify" || echo "No relevant warnings found."
      
       - name: Upload build log for inspection
         if: always()
