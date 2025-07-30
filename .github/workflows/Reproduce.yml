@@ -1,4 +1,4 @@
-name: Reproduce Kernel Build Warning (Optimized LKP Method)
+name: Reproduce Kernel Build Warning (Final LKP Method)
 
 on:
   workflow_dispatch:
@@ -21,22 +21,16 @@ jobs:
           remove-android: 'true'
           remove-haskell: 'true'
 
-      - name: Install dependencies
+      - name: Install dependencies (including lftp)
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             git wget flex bison build-essential libssl-dev libelf-dev \
-            binutils-loongarch64-linux-gnu
-
-      - name: Install Clang-18 (as a close substitute for clang-20)
-        run: |
-          wget https://apt.llvm.org/llvm.sh
-          chmod +x llvm.sh
-          sudo ./llvm.sh 18 all
-          clang-18 --version
+            binutils-loongarch64-linux-gnu lftp
 
       - name: Clone LKP Test Scripts
         run: |
+          # The LKP robot uses helper scripts, so we must clone them first.
           git clone https://github.com/intel/lkp-tests.git ~/lkp-tests
 
       - name: Cache Kernel Repository
@@ -66,13 +60,14 @@ jobs:
         working-directory: ./linux-next
         run: |
           echo "### Preparing config with LKP script... ###"
-          # Run olddefconfig using the LKP wrapper script, providing ALL required variables.
-          COMPILER_INSTALL_PATH=$HOME/0day COMPILER=clang-18 CROSS_COMPILE=loongarch64-linux-gnu- \
+          # Run olddefconfig using the LKP wrapper script.
+          # We specify COMPILER=clang-20 so the script knows which compiler to download and use.
+          COMPILER_INSTALL_PATH=$HOME/0day COMPILER=clang-20 CROSS_COMPILE=loongarch64-linux-gnu- \
           ~/lkp-tests/kbuild/make.cross W=1 O=build_dir ARCH=loongarch olddefconfig
 
           echo "### Starting main build with LKP script... ###"
           # Run the main build (vmlinux target) using the LKP wrapper script
-          COMPILER_INSTALL_PATH=$HOME/0day COMPILER=clang-18 CROSS_COMPILE=loongarch64-linux-gnu- \
+          COMPILER_INSTALL_PATH=$HOME/0day COMPILER=clang-20 CROSS_COMPILE=loongarch64-linux-gnu- \
           ~/lkp-tests/kbuild/make.cross W=1 O=build_dir ARCH=loongarch vmlinux -j$(nproc) | tee build.log || true
 
       - name: Check for the specific warnings
@@ -93,7 +88,6 @@ jobs:
             echo "::notice::SUCCESS: One or more expected warnings were successfully reproduced."
           else
             echo "::error::FAILURE: Could not reproduce the expected objtool warnings."
-            # exit 1
           fi
 
       - name: Upload build log for inspection
