@@ -1,0 +1,86 @@
+name: Reproduce Kernel Build Warning
+
+# Allows you to run this workflow manually from the Actions tab
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Maximize build space
+        uses: ublue-os/disk-image-actions/cleanup@v1
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            git wget flex bison build-essential libssl-dev libelf-dev \
+            binutils-loongarch-linux-gnu
+
+      - name: Install specific Clang version
+        run: |
+          # The LKP report uses clang-20. We will use the LLVM official installation script.
+          # We'll install clang-18 as it's a recent, stable version readily available via this script
+          # and is very likely to reproduce compiler optimization-related warnings.
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 18 all
+          # Verify clang version
+          clang-18 --version
+
+      - name: Check out kernel source at specific commit
+        run: |
+          # Clone linux-next repository
+          git clone https://git.kernel.org/pub/scm/linux/kernel/git/next/linux-next.git
+          cd linux-next
+          # Check out the exact commit that introduced the warning
+          git checkout 77da18de55ac6417e48905bec8b3c66f023b15a9
+
+      - name: Prepare build environment
+        working-directory: ./linux-next
+        run: |
+          # Download the specific config file from the LKP report
+          wget -O config 'https://download.01.org/0day-ci/archive/20250730/202507301256.cZlxQ10s-lkp@intel.com/config'
+          
+          # Create build directory and place the config file
+          mkdir build_dir
+          cp config build_dir/.config
+
+      - name: Build the kernel
+        id: build_step
+        working-directory: ./linux-next
+        run: |
+          # Prepare the config file
+          make ARCH=loongarch CROSS_COMPILE=loongarch-linux-gnu- CC=clang-18 O=build_dir W=1 olddefconfig
+          
+          # Run the build, redirecting all output to a log file and also to stdout
+          # We use `|| true` to ensure the workflow continues even if the build fails, so we can check the log
+          make ARCH=loongarch CROSS_COMPILE=loongarch-linux-gnu- CC=clang-18 O=build_dir W=1 -j$(nproc) | tee build.log || true
+
+      - name: Check for the specific warnings
+        working-directory: ./linux-next
+        run: |
+          echo "Searching for objtool warnings in build.log..."
+          
+          # Use grep to find the specific warnings. We check for both.
+          WATCHDOG_WARN=$(grep -c "objtool: watchdog+.*: sibling call from callable instruction with modified stack frame" build.log)
+          NOTIFY_WARN=$(grep -c "objtool: hungtask_pm_notify+.*: sibling call from callable instruction with modified stack frame" build.log)
+          
+          if [ "$WATCHDOG_WARN" -gt 0 ] && [ "$NOTIFY_WARN" -gt 0 ]; then
+            echo "::notice::SUCCESS: Both 'watchdog' and 'hungtask_pm_notify' warnings were successfully reproduced."
+          elif [ "$WATCHDOG_WARN" -gt 0 ]; then
+            echo "::warning::PARTIAL SUCCESS: Only the 'watchdog' warning was reproduced."
+          else
+            echo "::error::FAILURE: Could not reproduce the expected objtool warnings."
+            # Optionally, fail the workflow if reproduction fails
+            # exit 1 
+          fi
+
+      - name: Upload build log for inspection
+        if: always() # Always run this step to upload logs, even if previous steps failed
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: ./linux-next/build.log
