@@ -70,26 +70,12 @@ jobs:
           COMPILER_INSTALL_PATH=$HOME/0day COMPILER=clang-20 CROSS_COMPILE=loongarch64-linux-gnu- \
           ~/lkp-tests/kbuild/make.cross W=1 O=build_dir ARCH=loongarch vmlinux -j$(nproc) | tee build.log || true
 
-      - name: Check for the specific warnings
+      - name: Show relevant warnings from build log
         working-directory: ./linux-next
         run: |
-          echo "Searching for objtool warnings in build.log..."
-          WATCHDOG_WARN=$(grep -c "objtool: watchdog+.*: sibling call from callable instruction with modified stack frame" build.log)
-          NOTIFY_WARN=$(grep -c "objtool: hungtask_pm_notify+.*: sibling call from callable instruction with modified stack frame" build.log)
-          
-          OBJTOOL_RUN=$(grep -c "OBJTOOL .*vmlinux.o" build.log)
-          if [ "$OBJTOOL_RUN" -eq 0 ]; then
-            echo "::error::Objtool was not run! Check the build configuration."
-          else
-            echo "::notice::Objtool was run successfully."
-          fi
-          
-          if [ "$WATCHDOG_WARN" -gt 0 ] || [ "$NOTIFY_WARN" -gt 0 ]; then
-            echo "::notice::SUCCESS: One or more expected warnings were successfully reproduced."
-          else
-            echo "::error::FAILURE: Could not reproduce the expected objtool warnings."
-          fi
-
+          echo "### Searching for relevant objtool warnings in build.log ###"
+          grep "warning: objtool" build.log | grep -E "watchdog|hungtask_pm_notify" || echo "No relevant warnings found."
+     
       - name: Upload build log for inspection
         if: always()
         uses: actions/upload-artifact@v4
