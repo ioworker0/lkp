@@ -53,7 +53,7 @@ jobs:
         run: |
           echo "Applying noinline fix to kernel/hung_task.c..."
           sed -i 's/static int watchdog(void \*dummy)/static noinline int watchdog(void *dummy)/' kernel/hung_task.c
-          sed -i 's/static int hungtask_pm_notify(struct notifier_block \*self,/static noinline int hungtask_pm_notify(struct notifier_block *self,/' kernel/hung_task.c
+          # sed -i 's/static int hungtask_pm_notify(struct notifier_block \*self,/static noinline int hungtask_pm_notify(struct notifier_block *self,/' kernel/hung_task.c
           echo "Fix applied. Verifying changes:"
           grep "noinline" kernel/hung_task.c
 
