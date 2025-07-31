@@ -37,14 +37,18 @@ jobs:
         id: kernel-cache
         uses: actions/cache@v4
         with:
-          path: linux-next
+          path: linux-next-bak
           key: linux-next-${{ runner.os }}-${{ env.KERNEL_COMMIT }}
 
       - name: Clone kernel and checkout commit (if not cached)
         if: steps.kernel-cache.outputs.cache-hit != 'true'
         run: |
           echo "Cache miss. Cloning full repository..."
-          git clone https://git.kernel.org/pub/scm/linux/kernel/git/next/linux-next.git
+          git clone https://git.kernel.org/pub/scm/linux/kernel/git/next/linux-next.git linux-next-bak
+
+      - name: CP linux-next
+        run: |
+          cp -rp linux-next-bak linux-next
           cd linux-next
           git checkout ${{ env.KERNEL_COMMIT }}
 
@@ -52,8 +56,8 @@ jobs:
         working-directory: ./linux-next
         run: |
           echo "Applying noinline fix to kernel/hung_task.c..."
-          sed -i 's/static void check_hung_uninterruptible_tasks(unsigned long timeout)/static noinline void check_hung_uninterruptible_tasks(unsigned long timeout)/' kernel/hung_task.c
-          # sed -i 's/static int watchdog(void \*dummy)/static noinline int watchdog(void *dummy)/' kernel/hung_task.c
+          # sed -i 's/static void check_hung_uninterruptible_tasks(unsigned long timeout)/static noinline void check_hung_uninterruptible_tasks(unsigned long timeout)/' kernel/hung_task.c
+          sed -i 's/static int watchdog(void \*dummy)/static noinline int watchdog(void *dummy)/' kernel/hung_task.c
           # sed -i 's/static int hungtask_pm_notify(struct notifier_block \*self,/static noinline int hungtask_pm_notify(struct notifier_block *self,/' kernel/hung_task.c
           echo "Fix applied. Verifying changes:"
           grep "noinline" kernel/hung_task.c
